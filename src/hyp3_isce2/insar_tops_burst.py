@@ -147,7 +147,11 @@ def insar_tops_burst(
     else:
         topsapp.run_topsapp_burst(start='computeBaselines', end='unwrap2stage', config_xml=config_path)
     copyfile('merged/z.rdr.full.xml', 'merged/z.rdr.full.vrt.xml')
-    topsapp.run_topsapp_burst(start='geocode', end='geocode', config_xml=config_path)
+    topsapp.run_topsapp_burst(start='geocode', end='denseoffsets', config_xml=config_path)
+    
+    # NOTE: On MACOS, RuntimeError: context has already been set 
+    # Need to revert this change https://github.com/isce-framework/isce2/issues/146
+    topsapp.run_topsapp_burst(start='denseoffsets', end='geocodeoffsets', config_xml=config_path)
 
     return Path('merged')
 
@@ -541,7 +545,8 @@ def main():
         for browse in product_dir.glob('*.png'):
             create_thumbnail(browse, output_dir=product_dir)
 
-        upload_file_to_s3(Path(output_zip), args.bucket, args.bucket_prefix)
+        # Only upload data products to S3, not redundent zip (or put them all in a GDAL sozip?)
+        # upload_file_to_s3(Path(output_zip), args.bucket, args.bucket_prefix)
 
         for product_file in product_dir.iterdir():
             upload_file_to_s3(product_file, args.bucket, args.bucket_prefix)

@@ -23,6 +23,7 @@
     <property name="demFilename">{{ dem_filename }}</property>
     <property name="geocodeDemFilename">{{ geocode_dem_filename }}</property>
     <property name="do unwrap">{{ do_unwrap }}</property>
+    <property name="do dense offsets">{{ do_dense_offsets }}</property>
     <property name="unwrapper name">snaphu_mcf</property>
     <property name="do ionosphere correction">{{ estimate_ionosphere_delay }}</property>
     <property name="apply ionosphere correction">False</property>
