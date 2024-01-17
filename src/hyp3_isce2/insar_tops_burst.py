@@ -326,6 +326,8 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
         ISCE2Dataset('phsig.cor.geo', 'corr', 1),
         ISCE2Dataset('dem.crop', 'dem', 1),
         ISCE2Dataset('filt_topophase.unw.conncomp.geo', 'conncomp', 1),
+        ISCE2Dataset('filt_dense_offsets.bil.geo', 'azi_off', 1),
+        ISCE2Dataset('filt_dense_offsets.bil.geo', 'rng_off', 2),
     ]
 
     for dataset in datasets:
@@ -516,6 +518,17 @@ def main():
             '--overwrite '
             '--NoDataValue 0 '
             '--creation-option TILED=YES --creation-option COMPRESS=LZW --creation-option NUM_THREADS=ALL_CPUS'
+        )
+        subprocess.run(cmd.split(' '), check=True)
+
+    # Convert to COGs
+    for regular_tif in product_dir.glob('*.tif'):
+        os.rename(regular_tif, 'tmp.tif')
+        cmd = (
+            'gdal_translate '
+            '-of COG '
+            'tmp.tif '
+            f'{regular_tif}'
         )
         subprocess.run(cmd.split(' '), check=True)
 
