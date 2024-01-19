@@ -5,6 +5,8 @@ import glob
 import re
 import subprocess
 import os
+from pathlib import Path
+import shutil
 
 import pystac
 from pystac.utils import str_to_datetime
@@ -40,6 +42,7 @@ def hyp32stac():
     ''' convert ASF HYP3 Ouput to STAC ITEM
     assumes single hyp3isce output folder in current directory (S1_023790_IW1_20230621_20230703_VV_INT80_6983)
     '''
+    print('Creating STAC Metadata...')
     outdir = glob.glob('S1_*[!zip]')[0]
     prefix = outdir[14:31]
 
@@ -89,8 +92,8 @@ def hyp32stac():
         #{"name": "thumbnail", "href": job.thumbnail_images[0], "role": ['thumbnail'], "type":pystac.MediaType.PNG},
         {"name": "metadata", "href": gdal_path+'.txt', "role": ['metadata'], "type":pystac.MediaType.TEXT},
         # Add custom outputs
-        {"name": "azimuth_offsets", "href": gdal_path+'_azi_off.tif', "role": ['metadata'], "type":pystac.MediaType.COG},
-        {"name": "range_offsets", "href": gdal_path+'_rng_off.tif', "role": ['metadata'], "type":pystac.MediaType.COG},
+        #{"name": "azimuth_offsets", "href": gdal_path+'_azi_off.tif', "role": ['metadata'], "type":pystac.MediaType.COG},
+        #{"name": "range_offsets", "href": gdal_path+'_rng_off.tif', "role": ['metadata'], "type":pystac.MediaType.COG},
     ]
 
     # Assume all tifs same dimensions
@@ -274,9 +277,17 @@ def create_collection(collection_id):
     
     return collection
 
+def include_additional_files():
+    print('Copying additional files to output folder...')
+    additional_files = ['topsApp.xml', 'isce.log']
+    product_dir = Path(glob.glob('S1_*[!zip]')[0])
+    for f in additional_files:
+        shutil.copyfile(f, os.path.join(product_dir,f))
+
 
 def hyp32cogs():
-    product_dir = glob.glob('S1_*[!zip]')[0]
+    print('Converting TIFs to COGs...')
+    product_dir = Path(glob.glob('S1_*[!zip]')[0])
     for regular_tif in product_dir.glob('*.tif'):
         os.rename(regular_tif, 'tmp.tif')
         cmd = (
@@ -290,4 +301,5 @@ def hyp32cogs():
 
 if __name__ == '__main__':
     hyp32cogs()
+    include_additional_files()
     hyp32stac()
