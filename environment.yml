@@ -32,4 +32,4 @@ dependencies:
   # For STAC
   - pystac
   - rio-stac
-  - json
+  - jsonschema
