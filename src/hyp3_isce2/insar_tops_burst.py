@@ -535,13 +535,13 @@ def main():
         swath_number=swath_number,
         apply_water_mask=apply_water_mask,
     )
-    output_zip = make_archive(base_name=product_name, format='zip', base_dir=product_name)
+    #output_zip = make_archive(base_name=product_name, format='zip', base_dir=product_name)
 
     if args.bucket:
         for browse in product_dir.glob('*.png'):
             create_thumbnail(browse, output_dir=product_dir)
 
-        upload_file_to_s3(Path(output_zip), args.bucket, args.bucket_prefix)
+        #upload_file_to_s3(Path(output_zip), args.bucket, args.bucket_prefix)
 
         for product_file in product_dir.iterdir():
             upload_file_to_s3(product_file, args.bucket, args.bucket_prefix)
