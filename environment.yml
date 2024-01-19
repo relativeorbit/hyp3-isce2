@@ -29,3 +29,7 @@ dependencies:
   - pytest-mock
   # For running
   - hyp3lib>=3,<4
+  # For contrib postprocessing
+  - pystac 
+  - rio-stac 
+  - jsonschema
