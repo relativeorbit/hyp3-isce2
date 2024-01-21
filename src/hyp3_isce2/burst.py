@@ -16,6 +16,11 @@ from lxml import etree
 from shapely import geometry
 
 
+import xmlschema
+import lxml
+#import numpy as np
+METADATA_DIR = Path(__file__).parent / 'metadata'
+
 log = logging.getLogger(__name__)
 
 
@@ -366,20 +371,53 @@ def get_product_name(
     ])
 
 
-def get_burst_params(scene_name: str) -> BurstParams:
-    results = asf_search.search(product_list=[scene_name])
+def get_burst_params(scene_name, burstId, polarization, product_schema=f'{METADATA_DIR}/s1-level-1-product.xsd'):
+    ''' given an ASF SLC Name and ESA bustID return relative burst number within SLC
+    
+    (S1A_IW_SLC__1SDV_20230609T121402_20230609T121429_048909_05E1AE_0021)
+    
+    Note: requires support/s1-level-1-product.xsd XML schema from SLC SAFE for parsing metadata
+    '''
+    with get_asf_session() as session:
+        subswath = burstId[-3:]
 
-    if len(results) == 0:
-        raise ValueError(f'ASF Search failed to find {scene_name}.')
-    if len(results) > 1:
-        raise ValueError(f'ASF Search found multiple results for {scene_name}.')
+        # Get All XML metadata for SLC
+        root = download_metadata(session, BurstParams(scene_name, subswath, polarization, 1))
+        ipfnode = root.find('.//safe:software', {'safe':'http://www.esa.int/safe/sentinel-1.0'})
+        IPF = ipfnode.attrib['version']
 
-    return BurstParams(
-        granule=results[0].umm['InputGranules'][0].split('-')[0],
-        swath=results[0].properties['burst']['subswath'],
-        polarization=results[0].properties['polarization'],
-        burst_number=results[0].properties['burst']['burstIndex'],
-    )
+        # Extract correct section of xml
+        for product in root.findall('.//product'):
+            prod_pol = product.find('polarisation').text
+            prod_swath = product.find('swath').text
+            
+            if (prod_pol == polarization) and (prod_swath == subswath):
+                node = product.find('content')
+                node.tag = 'product'
+                string = lxml.etree.tostring(node, encoding='unicode')
+                
+        # Convert to python dictionary
+        xs = xmlschema.XMLSchema(product_schema)
+        parsed = xs.to_dict(string, validation='lax')[0]
+        
+        if IPF >= '003.4':
+            relativeBurstID = int(burstId.split('_')[1])
+            burst_numbers = [t.get('burstId').get('$') for t in parsed['swathTiming']['burstList']['burst']]
+            burstnum = burst_numbers.index(relativeBurstID)
+            print(f'relativeBurstID: {relativeBurstID}, burstIndex: {burstnum}')
+        else:
+            raise ValueError(f'REQUIRES IPF>003.4 for burst metadata, SLC {scene_name} has IPF={IPF}')
+            # TODO: requires lookup of tanx from ESA database!
+            # TODO: do without numpy?
+            #tanx = np.array([t['azimuthAnxTime'] for t in parsed['swathTiming']['burstList']['burst']])
+            #burstnum = np.argmin(np.abs(tanx - myburst.time_from_anx_sec))
+        
+        return BurstParams(
+            granule=scene_name,
+            swath=subswath,
+            polarization=polarization,
+            burst_number=burstnum,
+        )
 
 
 def validate_bursts(reference_scene: str, secondary_scene: str) -> None:
