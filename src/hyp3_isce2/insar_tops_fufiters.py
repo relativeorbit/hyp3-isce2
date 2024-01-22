@@ -11,6 +11,8 @@ from pathlib import Path
 from shutil import copyfile, make_archive
 from typing import Optional
 
+from secrets import token_hex
+
 import isce
 from hyp3lib.aws import upload_file_to_s3
 from hyp3lib.get_orb import downloadSentinelOrbitFile
@@ -26,7 +28,7 @@ import hyp3_isce2.metadata.util
 from hyp3_isce2 import topsapp
 from hyp3_isce2.burst import (
     download_bursts,
-    get_burst_params,
+    get_burst_params_backdate,
     get_isce2_burst_bbox,
     get_product_name,
     get_region_of_interest,
@@ -87,8 +89,8 @@ def insar_tops_fufiters(
     dem_dir = Path('dem')
 
     swath_number = int(burstId[-1])
-    ref_params = get_burst_params(reference_scene, burstId, polarization)
-    sec_params = get_burst_params(secondary_scene, burstId, polarization)
+    ref_params = get_burst_params_backdate(reference_scene, burstId, polarization)
+    sec_params = get_burst_params_backdate(secondary_scene, burstId, polarization)
 
     ref_metadata, sec_metadata = download_bursts([ref_params, sec_params])
 
@@ -483,7 +485,6 @@ def main():
 
     log.info('Begin ISCE2 TopsApp FUFITERS!!!')
 
-
     #reference_scene, secondary_scene = oldest_granule_first(args.granules[0], args.granules[1])
     #validate_bursts(reference_scene, secondary_scene)
     #swath_number = int(reference_scene[12])
@@ -505,9 +506,14 @@ def main():
         esa_password=args.esa_password,
     )
 
-    log.info('ISCE2 TopsApp run completed successfully')
+    log.info('ISCE2 TopsApp FUFITERS run completed successfully')
     pixel_size = get_pixel_size(args.looks)
-    product_name = get_product_name(reference_scene, secondary_scene, pixel_spacing=int(pixel_size))
+    #product_name = get_product_name(reference_scene, secondary_scene, pixel_spacing=int(pixel_size))
+    #Adds relativeOrbit S1_023790_IW1_20230621_20230703_VV_INT80_BABB -> S1_012_023790_IW1_20230621_20230703_VV_INT80_BABB
+    reference_date = reference_scene[17:25]
+    secondary_date = secondary_scene[17:25]
+    product_id = token_hex(2).upper()
+    product_name = f'S1_{args.burstId}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}_{product_id}'
 
     product_dir = Path(product_name)
     product_dir.mkdir(parents=True, exist_ok=True)

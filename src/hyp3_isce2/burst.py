@@ -370,13 +370,28 @@ def get_product_name(
         product_id
     ])
 
+def get_burst_params(scene_name: str) -> BurstParams:
+    ''' insar_tops_burst workflow scene_name~S1_023790_IW1_20230621T121426_VV_BAD8-BURST '''
+    results = asf_search.search(product_list=[scene_name])
 
-def get_burst_params(scene_name, burstId, polarization, product_schema=f'{METADATA_DIR}/s1-level-1-product.xsd'):
-    ''' given an ASF SLC Name and ESA bustID return relative burst number within SLC
-    
-    (S1A_IW_SLC__1SDV_20230609T121402_20230609T121429_048909_05E1AE_0021)
-    
-    Note: requires support/s1-level-1-product.xsd XML schema from SLC SAFE for parsing metadata
+    if len(results) == 0:
+        raise ValueError(f'ASF Search failed to find {scene_name}.')
+    if len(results) > 1:
+        raise ValueError(f'ASF Search found multiple results for {scene_name}.')
+
+    return BurstParams(
+        granule=results[0].umm['InputGranules'][0].split('-')[0],
+        swath=results[0].properties['burst']['subswath'],
+        polarization=results[0].properties['polarization'],
+        burst_number=results[0].properties['burst']['burstIndex'],
+    )
+
+
+
+def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=f'{METADATA_DIR}/s1-level-1-product.xsd'):
+    ''' insar_tops_fufiters workflow scene_name~S1A_IW_SLC__1SDV_20230621T121402_20230621T121429_049084_05E705_BAD8
+    burstId~012_023790_IW1
+    polarization~VV
     '''
     with get_asf_session() as session:
         subswath = burstId[-3:]
