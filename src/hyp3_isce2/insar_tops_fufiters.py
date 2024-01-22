@@ -89,8 +89,8 @@ def insar_tops_fufiters(
     dem_dir = Path('dem')
 
     swath_number = int(burstId[-1])
-    ref_params = get_burst_params_backdate(reference_scene, burstId, polarization)
-    sec_params = get_burst_params_backdate(secondary_scene, burstId, polarization)
+    ref_params, ref_azimuthTime = get_burst_params_backdate(reference_scene, burstId, polarization)
+    sec_params, sec_azimuthTime = get_burst_params_backdate(secondary_scene, burstId, polarization)
 
     ref_metadata, sec_metadata = download_bursts([ref_params, sec_params])
 
@@ -168,7 +168,7 @@ def make_readme(
 ) -> None:
     wrapped_phase_path = product_dir / f'{product_name}_wrapped_phase.tif'
     info = gdal.Info(str(wrapped_phase_path), format='json')
-    secondary_granule_datetime_str = secondary_scene.split('_')[3]
+    secondary_granule_datetime_str = secondary_scene.split('_')[5]
 
     payload = {
         'processing_date': datetime.now(timezone.utc),
@@ -227,8 +227,8 @@ def make_parameter_file(
 
     parser = etree.XMLParser(encoding='utf-8', recover=True)
 
-    ref_tag = reference_scene[-10:-6]
-    sec_tag = secondary_scene[-10:-6]
+    ref_tag = reference_scene[-4:]
+    sec_tag = secondary_scene[-4:]
     reference_safe = [file for file in os.listdir('.') if file.endswith(f'{ref_tag}.SAFE')][0]
     secondary_safe = [file for file in os.listdir('.') if file.endswith(f'{sec_tag}.SAFE')][0]
 
@@ -485,9 +485,6 @@ def main():
 
     log.info('Begin ISCE2 TopsApp FUFITERS!!!')
 
-    #reference_scene, secondary_scene = oldest_granule_first(args.granules[0], args.granules[1])
-    #validate_bursts(reference_scene, secondary_scene)
-    #swath_number = int(reference_scene[12])
     reference_scene, secondary_scene = args.granules[0], args.granules[1]
     swath_number = args.burstId[-1]
     
@@ -508,12 +505,11 @@ def main():
 
     log.info('ISCE2 TopsApp FUFITERS run completed successfully')
     pixel_size = get_pixel_size(args.looks)
-    #product_name = get_product_name(reference_scene, secondary_scene, pixel_spacing=int(pixel_size))
-    #Adds relativeOrbit S1_023790_IW1_20230621_20230703_VV_INT80_BABB -> S1_012_023790_IW1_20230621_20230703_VV_INT80_BABB
+    #Include relativeObit in ProductName for convenience?
     reference_date = reference_scene[17:25]
     secondary_date = secondary_scene[17:25]
     product_id = token_hex(2).upper()
-    product_name = f'S1_{args.burstId}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}_{product_id}'
+    product_name = f'S1_{args.burstId[4:]}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}_{product_id}'
 
     product_dir = Path(product_name)
     product_dir.mkdir(parents=True, exist_ok=True)

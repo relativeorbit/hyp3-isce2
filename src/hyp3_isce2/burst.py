@@ -392,6 +392,9 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
     ''' insar_tops_fufiters workflow scene_name~S1A_IW_SLC__1SDV_20230621T121402_20230621T121429_049084_05E705_BAD8
     burstId~012_023790_IW1
     polarization~VV
+
+    TODO: also return burst startTime for productId? (to match S1_023790_IW1_20230621T121426_VV_BAD8-BURST)
+    It is <azimuthTime> in metadata XML
     '''
     with get_asf_session() as session:
         subswath = burstId[-3:]
@@ -419,7 +422,10 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
             relativeBurstID = int(burstId.split('_')[1])
             burst_numbers = [t.get('burstId').get('$') for t in parsed['swathTiming']['burstList']['burst']]
             burstnum = burst_numbers.index(relativeBurstID)
-            print(f'relativeBurstID: {relativeBurstID}, burstIndex: {burstnum}')
+            # Also return azimuthTime
+            azimuth_times = [t.get('azimuthTime') for t in parsed['swathTiming']['burstList']['burst']]
+            azimuthTime = azimuth_times[burstnum]
+            print(f'relativeBurstID: {relativeBurstID}, burstIndex: {burstnum}, azimuthTime: {azimuthTime}')
         else:
             raise ValueError(f'REQUIRES IPF>003.4 for burst metadata, SLC {scene_name} has IPF={IPF}')
             # TODO: requires lookup of tanx from ESA database!
@@ -432,7 +438,7 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
             swath=subswath,
             polarization=polarization,
             burst_number=burstnum,
-        )
+        ), azimuthTime
 
 
 def validate_bursts(reference_scene: str, secondary_scene: str) -> None:
