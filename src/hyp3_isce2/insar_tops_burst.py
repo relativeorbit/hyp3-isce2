@@ -145,13 +145,32 @@ def insar_tops_burst(
         topsapp.run_topsapp_burst(start='unwrap', end='unwrap2stage', config_xml=config_path)
         isce2_copy('merged/unmasked.phsig.cor', 'merged/phsig.cor')
     else:
-        topsapp.run_topsapp_burst(start='computeBaselines', end='unwrap2stage', config_xml=config_path)
-    copyfile('merged/z.rdr.full.xml', 'merged/z.rdr.full.vrt.xml')
-    topsapp.run_topsapp_burst(start='geocode', end='denseoffsets', config_xml=config_path)
+        # computing IFG isnt't strictly necessary but simplifies standard creation of merged folder & gives coherence
+        topsapp.run_topsapp_burst(start='computeBaselines', end='geocode', config_xml=config_path)
     
-    # NOTE: On MACOS, RuntimeError: context has already been set 
-    # Need to revert this change https://github.com/isce-framework/isce2/issues/146
-    topsapp.run_topsapp_burst(start='denseoffsets', end='geocodeoffsets', config_xml=config_path)
+    copyfile('merged/z.rdr.full.xml', 'merged/z.rdr.full.vrt.xml')
+    
+    # For reasons unknown, this raises an error, but works if launched from a subprocess!
+    #  https://github.com/isce-framework/isce2/issues/146
+    #  mp.set_start_method("fork") -> RuntimeError: context has already been set
+    #topsapp.run_topsapp_burst(start='denseoffsets', end='geocodeoffsets', config_xml=config_path)
+    ISCE_APPLICATIONS = str(Path(os.environ['ISCE_HOME']) / 'applications')
+    cmd = f"{ISCE_APPLICATIONS}/topsApp.py --start=denseoffsets --end=filteroffsets"
+    print(cmd)
+    subprocess.run(cmd.split(' '), check=True)
+
+    # Hack: In order for geocoding step to work, need to copy some XML metadata from previous steps
+    with open('PICKLE/mergebursts.xml', 'r') as f:
+        lines = f.readlines()
+        indx = [i for i,x in enumerate(lines) if 'numberofcommonbursts' in x][0]
+        append_lines = lines[indx:indx+4]
+    with open('PICKLE/filteroffsets.xml', 'r+') as f:
+        lines = f.readlines()
+        lines[1:1] = append_lines
+        f.seek(0) #overwrite from begginning
+        f.writelines(lines)
+
+    topsapp.run_topsapp_burst(dostep='geocodeoffsets', config_xml=config_path)
 
     return Path('merged')
 
@@ -310,7 +329,7 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
         pixel_size: Pixel size
     """
 
-    src_ds = gdal.Open(str(isce_output_dir / 'filt_topophase.unw.geo'))
+    src_ds = gdal.Open(str(isce_output_dir / 'phsig.cor.geo'))
     src_geotransform = src_ds.GetGeoTransform()
     src_projection = src_ds.GetProjection()
 
@@ -322,12 +341,12 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
 
     ISCE2Dataset = namedtuple('ISCE2Dataset', ['name', 'suffix', 'band'])
     datasets = [
-        ISCE2Dataset('filt_topophase.unw.geo', 'unw_phase', 2),
+        #TODO: keep filtered or unfiltered datasets?
         ISCE2Dataset('phsig.cor.geo', 'corr', 1),
         ISCE2Dataset('dem.crop', 'dem', 1),
-        ISCE2Dataset('filt_topophase.unw.conncomp.geo', 'conncomp', 1),
-        ISCE2Dataset('filt_dense_offsets.bil.geo', 'azi_off', 1),
-        ISCE2Dataset('filt_dense_offsets.bil.geo', 'rng_off', 2),
+        ISCE2Dataset('dense_offsets.bil.geo', 'azi_off', 1),
+        ISCE2Dataset('dense_offsets.bil.geo', 'rng_off', 2),
+        ISCE2Dataset('dense_offsets_snr.bil.geo', 'snr', 1),
     ]
 
     for dataset in datasets:
@@ -344,15 +363,15 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
         )
 
     # Use numpy.angle to extract the phase component of the complex wrapped interferogram
-    wrapped_phase = ISCE2Dataset('filt_topophase.flat.geo', 'wrapped_phase', 1)
-    cmd = (
-        'gdal_calc.py '
-        f'--outfile {product_name}/{product_name}_{wrapped_phase.suffix}.tif '
-        f'-A {isce_output_dir / wrapped_phase.name} --A_band={wrapped_phase.band} '
-        '--calc angle(A) --type Float32 --format GTiff --NoDataValue=0 '
-        '--creation-option TILED=YES --creation-option COMPRESS=LZW --creation-option NUM_THREADS=ALL_CPUS'
-    )
-    subprocess.run(cmd.split(' '), check=True)
+    # wrapped_phase = ISCE2Dataset('filt_topophase.flat.geo', 'wrapped_phase', 1)
+    # cmd = (
+    #     'gdal_calc.py '
+    #     f'--outfile {product_name}/{product_name}_{wrapped_phase.suffix}.tif '
+    #     f'-A {isce_output_dir / wrapped_phase.name} --A_band={wrapped_phase.band} '
+    #     '--calc angle(A) --type Float32 --format GTiff --NoDataValue=0 '
+    #     '--creation-option TILED=YES --creation-option COMPRESS=LZW --creation-option NUM_THREADS=ALL_CPUS'
+    # )
+    # subprocess.run(cmd.split(' '), check=True)
 
     ds = gdal.Open(str(isce_output_dir / 'los.rdr.geo'), gdal.GA_Update)
     ds.GetRasterBand(1).SetNoDataValue(0)
@@ -387,9 +406,10 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
     )
     subprocess.run(cmd.split(' '), check=True)
 
-    ds = gdal.Open(str(isce_output_dir / 'filt_topophase.unw.geo'))
-    geotransform = ds.GetGeoTransform()
-    del ds
+    # ds = gdal.Open(str(isce_output_dir / 'filt_topophase.unw.geo'))
+    # geotransform = ds.GetGeoTransform()
+    # del ds
+    geotransform = src_geotransform
 
     epsg = utm_from_lon_lat(geotransform[0], geotransform[3])
     files = [str(path) for path in Path(product_name).glob('*.tif')]
@@ -505,21 +525,21 @@ def main():
 
     translate_outputs(isce_output_dir, product_name, pixel_size=pixel_size)
 
-    unwrapped_phase = f'{product_name}/{product_name}_unw_phase.tif'
-    water_mask = f'{product_name}/{product_name}_water_mask.tif'
+    # unwrapped_phase = f'{product_name}/{product_name}_unw_phase.tif'
+    # water_mask = f'{product_name}/{product_name}_water_mask.tif'
 
-    if apply_water_mask:
-        convert_raster_from_isce2_gdal('water_mask.wgs84', unwrapped_phase, water_mask)
-        cmd = (
-            'gdal_calc.py '
-            f'--outfile {unwrapped_phase} '
-            f'-A {unwrapped_phase} -B {water_mask} '
-            '--calc A*B '
-            '--overwrite '
-            '--NoDataValue 0 '
-            '--creation-option TILED=YES --creation-option COMPRESS=LZW --creation-option NUM_THREADS=ALL_CPUS'
-        )
-        subprocess.run(cmd.split(' '), check=True)
+    # if apply_water_mask:
+    #     convert_raster_from_isce2_gdal('water_mask.wgs84', unwrapped_phase, water_mask)
+    #     cmd = (
+    #         'gdal_calc.py '
+    #         f'--outfile {unwrapped_phase} '
+    #         f'-A {unwrapped_phase} -B {water_mask} '
+    #         '--calc A*B '
+    #         '--overwrite '
+    #         '--NoDataValue 0 '
+    #         '--creation-option TILED=YES --creation-option COMPRESS=LZW --creation-option NUM_THREADS=ALL_CPUS'
+    #     )
+    #     subprocess.run(cmd.split(' '), check=True)
 
     # Convert to COGs
     for regular_tif in product_dir.glob('*.tif'):
@@ -532,8 +552,10 @@ def main():
         )
         subprocess.run(cmd.split(' '), check=True)
 
-    make_browse_image(unwrapped_phase, f'{product_name}/{product_name}_unw_phase.png')
+    range_offsets = f'{product_name}/{product_name}_rng_off.tif'
+    make_browse_image(range_offsets, f'{product_name}/{product_name}_rng_off.png')
 
+    # TODO: update for offset products
     make_readme(
         product_dir=product_dir,
         product_name=product_name,
@@ -552,7 +574,7 @@ def main():
         swath_number=swath_number,
         apply_water_mask=apply_water_mask,
     )
-    output_zip = make_archive(base_name=product_name, format='zip', base_dir=product_name)
+    # output_zip = make_archive(base_name=product_name, format='zip', base_dir=product_name)
 
     if args.bucket:
         for browse in product_dir.glob('*.png'):

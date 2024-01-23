@@ -36,12 +36,13 @@ TOPSAPP_STEPS = [
 ]
 TOPSAPP_GEOCODE_LIST = [
     'merged/phsig.cor',
-    'merged/filt_topophase.unw',
+    #'merged/filt_topophase.unw',
     'merged/los.rdr',
-    'merged/filt_topophase.flat',
-    'merged/topophase.cor',
-    'merged/filt_topophase.unw.conncomp',
-    'merged/filt_dense_offsets.bil.geo'
+    #'merged/filt_topophase.flat',
+    #'merged/topophase.cor',
+    #'merged/filt_topophase.unw.conncomp',
+    #'merged/filt_dense_offsets.bil',
+    #'dense_offsets_snr.bil'
 ]
 
 
