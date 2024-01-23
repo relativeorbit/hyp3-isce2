@@ -100,6 +100,11 @@ def extent_from_geotransform(geotransform: tuple, x_size: int, y_size: int) -> t
 
 def make_browse_image(input_tif: str, output_png: str) -> None:
     with GDALConfigManager(GDAL_PAM_ENABLED='NO'):
+        # Get stats from no-geocoded image b/c otherwise 2 separate nodata vals (0,-10000)
+        ds = gdal.Open(input_tif.replace('.geo',''), gdal.GA_Update)
+        ds.GetRasterBand(1).SetNoDataValue(-10000)
+        ds.GetRasterBand(2).SetNoDataValue(-10000)
+        del ds
         stats = gdal.Info(input_tif, format='json', stats=True)['stac']['raster:bands'][0]['stats']
         gdal.Translate(destName=output_png,
                        srcDS=input_tif,
