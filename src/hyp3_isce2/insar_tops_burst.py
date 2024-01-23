@@ -184,7 +184,7 @@ def make_readme(
     azimuth_looks: int,
     apply_water_mask: bool,
 ) -> None:
-    wrapped_phase_path = product_dir / f'{product_name}_wrapped_phase.tif'
+    wrapped_phase_path = product_dir / f'{product_name}_rng_off.tif'
     info = gdal.Info(str(wrapped_phase_path), format='json')
     secondary_granule_datetime_str = secondary_scene.split('_')[3]
 
