@@ -50,6 +50,7 @@
     <property name="Range shift">0</property> 
     <property name="Azimuth shift">0</property> 
     <property name="SNR Threshold factor"></property> 
+    <property name="offset SNR threshold">8</property> 
     <property name="Filter NULL factor">-10000.</property> 
     <property name="Filter window size">5</property> 
     <property name="offset geocode list">5</property> 
