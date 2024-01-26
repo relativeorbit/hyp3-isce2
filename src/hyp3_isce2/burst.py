@@ -435,15 +435,15 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
             print('Finding burst based on SLC Metadata...')
             burst_numbers = [t.get('burstId').get('$') for t in parsed['swathTiming']['burstList']['burst']]
             burstnum = burst_numbers.index(relativeBurstID)
-            # Also return azimuthTime
-            azimuth_times = [t.get('azimuthTime') for t in parsed['swathTiming']['burstList']['burst']]
-            azimuthTime = azimuth_times[burstnum]
         else:
             print('Finding burst based on TANX...')
             BURST_TANX = get_burst_tanx(burstId)
             tanx = np.array([t['azimuthAnxTime'] for t in parsed['swathTiming']['burstList']['burst']])
             burstnum = np.argmin(np.abs(tanx - BURST_TANX))
-        print(f'relativeBurstID: {relativeBurstID}, burstIndex: {burstnum}, azimuthTime: {azimuthTime}')
+        
+        azimuth_times = [t.get('azimuthTime') for t in parsed['swathTiming']['burstList']['burst']]
+        azimuthTime = azimuth_times[burstnum]
+        print(f'SLC Metadata for {relativeBurstID}: burstIndex= {burstnum}, azimuthTime= {azimuthTime}')
         
         return BurstParams(
             granule=scene_name,
