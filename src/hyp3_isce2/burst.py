@@ -410,6 +410,7 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
     '''
     with get_asf_session() as session:
         subswath = burstId[-3:]
+        relativeBurstID = int(burstId.split('_')[1])
 
         # Get All XML metadata for SLC
         root = download_metadata(session, BurstParams(scene_name, subswath, polarization, 1))
@@ -432,7 +433,6 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
         
         if IPF >= '003.4':
             print('Finding burst based on SLC Metadata...')
-            relativeBurstID = int(burstId.split('_')[1])
             burst_numbers = [t.get('burstId').get('$') for t in parsed['swathTiming']['burstList']['burst']]
             burstnum = burst_numbers.index(relativeBurstID)
             # Also return azimuthTime
