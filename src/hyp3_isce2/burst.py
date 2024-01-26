@@ -15,10 +15,11 @@ from isceobj.Sensor.TOPS.Sentinel1 import Sentinel1
 from lxml import etree
 from shapely import geometry
 
-
+# Fufiters workflow additional dependencies
 import xmlschema
-import lxml
-#import numpy as np
+import numpy as np
+import geopandas as gpd
+import fsspec
 METADATA_DIR = Path(__file__).parent / 'metadata'
 
 log = logging.getLogger(__name__)
@@ -387,14 +388,25 @@ def get_burst_params(scene_name: str) -> BurstParams:
     )
 
 
+def get_burst_tanx(burstId):
+    ''' time from ascending node should be constant for given burst'''
+    RELORB,BURSTID,SUBSWATH = burstId.split('_')
+    url = 'https://github.com/relativeorbit/s1burstids/raw/main/burst_map_IW_000001_375887_brotli.parquet'
+    with fsspec.open(url) as file:
+        gfb = gpd.read_parquet(file,
+                            filters=[('burst_id', '=', int(BURSTID)), 
+                                    ('subswath_name', '=', SUBSWATH)
+                            ]
+                            )
+    tanx = gfb.time_from_anx_sec.iloc[0]
+    
+    return tanx
+
 
 def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=f'{METADATA_DIR}/s1-level-1-product.xsd'):
     ''' insar_tops_fufiters workflow scene_name~S1A_IW_SLC__1SDV_20230621T121402_20230621T121429_049084_05E705_BAD8
     burstId~012_023790_IW1
     polarization~VV
-
-    TODO: also return burst startTime for productId? (to match S1_023790_IW1_20230621T121426_VV_BAD8-BURST)
-    It is <azimuthTime> in metadata XML
     '''
     with get_asf_session() as session:
         subswath = burstId[-3:]
@@ -412,33 +424,33 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
             if (prod_pol == polarization) and (prod_swath == subswath):
                 node = product.find('content')
                 node.tag = 'product'
-                string = lxml.etree.tostring(node, encoding='unicode')
+                string = etree.tostring(node, encoding='unicode')
                 
         # Convert to python dictionary
         xs = xmlschema.XMLSchema(product_schema)
         parsed = xs.to_dict(string, validation='lax')[0]
         
         if IPF >= '003.4':
+            print('Finding burst based on SLC Metadata...')
             relativeBurstID = int(burstId.split('_')[1])
             burst_numbers = [t.get('burstId').get('$') for t in parsed['swathTiming']['burstList']['burst']]
             burstnum = burst_numbers.index(relativeBurstID)
             # Also return azimuthTime
             azimuth_times = [t.get('azimuthTime') for t in parsed['swathTiming']['burstList']['burst']]
             azimuthTime = azimuth_times[burstnum]
-            print(f'relativeBurstID: {relativeBurstID}, burstIndex: {burstnum}, azimuthTime: {azimuthTime}')
         else:
-            raise ValueError(f'REQUIRES IPF>003.4 for burst metadata, SLC {scene_name} has IPF={IPF}')
-            # TODO: requires lookup of tanx from ESA database!
-            # TODO: do without numpy?
-            #tanx = np.array([t['azimuthAnxTime'] for t in parsed['swathTiming']['burstList']['burst']])
-            #burstnum = np.argmin(np.abs(tanx - myburst.time_from_anx_sec))
+            print('Finding burst based on TANX...')
+            BURST_TANX = get_burst_tanx(burstId)
+            tanx = np.array([t['azimuthAnxTime'] for t in parsed['swathTiming']['burstList']['burst']])
+            burstnum = np.argmin(np.abs(tanx - BURST_TANX))
+        print(f'relativeBurstID: {relativeBurstID}, burstIndex: {burstnum}, azimuthTime: {azimuthTime}')
         
         return BurstParams(
             granule=scene_name,
             swath=subswath,
             polarization=polarization,
             burst_number=burstnum,
-        ), azimuthTime
+        )
 
 
 def validate_bursts(reference_scene: str, secondary_scene: str) -> None:

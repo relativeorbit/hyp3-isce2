@@ -89,8 +89,8 @@ def insar_tops_fufiters(
     dem_dir = Path('dem')
 
     swath_number = int(burstId[-1])
-    ref_params, ref_azimuthTime = get_burst_params_backdate(reference_scene, burstId, polarization)
-    sec_params, sec_azimuthTime = get_burst_params_backdate(secondary_scene, burstId, polarization)
+    ref_params = get_burst_params_backdate(reference_scene, burstId, polarization)
+    sec_params = get_burst_params_backdate(secondary_scene, burstId, polarization)
 
     ref_metadata, sec_metadata = download_bursts([ref_params, sec_params])
 

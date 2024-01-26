@@ -31,3 +31,6 @@ dependencies:
   - hyp3lib>=3,<4
   # Additional
   - xmlschema
+  - pyarrow
+  - fsspec
+  - aiohttp
