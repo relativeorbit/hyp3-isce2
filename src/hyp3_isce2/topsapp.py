@@ -33,11 +33,10 @@ TOPSAPP_STEPS = [
 ]
 TOPSAPP_GEOCODE_LIST = [
     'merged/phsig.cor',
-    'merged/filt_topophase.unw',
+    #'merged/filt_topophase.unw',
     'merged/los.rdr',
-    'merged/filt_topophase.flat',
-    'merged/topophase.cor',
-    'merged/filt_topophase.unw.conncomp',
+    #'merged/filt_topophase.flat',
+    #'merged/topophase.cor',
 ]
 
 
@@ -57,7 +56,8 @@ class TopsappBurstConfig:
         swaths: Union[int, Iterable[int]] = (1, 2, 3),
         azimuth_looks: int = 4,
         range_looks: int = 20,
-        do_unwrap: bool = True,
+        do_unwrap: bool = False,
+        do_dense_offsets: bool = True
     ):
         self.reference_safe = reference_safe
         self.secondary_safe = secondary_safe
@@ -70,6 +70,8 @@ class TopsappBurstConfig:
         self.azimuth_looks = azimuth_looks
         self.range_looks = range_looks
         self.do_unwrap = do_unwrap
+        self.do_dense_offsets = do_dense_offsets
+        
 
         if isinstance(swaths, int):
             self.swaths = [swaths]
