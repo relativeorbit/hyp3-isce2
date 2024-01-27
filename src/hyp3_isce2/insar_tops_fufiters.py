@@ -11,6 +11,8 @@ from pathlib import Path
 from shutil import copyfile, make_archive
 from typing import Optional
 
+from secrets import token_hex
+
 import isce
 from hyp3lib.aws import upload_file_to_s3
 from hyp3lib.get_orb import downloadSentinelOrbitFile
@@ -26,7 +28,7 @@ import hyp3_isce2.metadata.util
 from hyp3_isce2 import topsapp
 from hyp3_isce2.burst import (
     download_bursts,
-    get_burst_params,
+    get_burst_params_backdate,
     get_isce2_burst_bbox,
     get_product_name,
     get_region_of_interest,
@@ -52,10 +54,11 @@ gdal.UseExceptions()
 log = logging.getLogger(__name__)
 
 
-def insar_tops_burst(
+def insar_tops_fufiters(
     reference_scene: str,
     secondary_scene: str,
-    swath_number: int,
+    burstId: str,
+    polarization: str,
     azimuth_looks: int = 4,
     range_looks: int = 20,
     apply_water_mask: bool = False,
@@ -67,7 +70,8 @@ def insar_tops_burst(
     Args:
         reference_scene: Reference burst name
         secondary_scene: Secondary burst name
-        swath_number: Number of swath to grab bursts from (1, 2, or 3) for IW
+        burstId: str,
+        polarization: str,
         azimuth_looks: Number of azimuth looks
         range_looks: Number of range looks
         apply_water_mask: Whether to apply a pre-unwrap water mask
@@ -83,9 +87,10 @@ def insar_tops_burst(
     orbit_dir = Path('orbits')
     aux_cal_dir = Path('aux_cal')
     dem_dir = Path('dem')
-
-    ref_params = get_burst_params(reference_scene)
-    sec_params = get_burst_params(secondary_scene)
+    
+    swath_number = int(burstId[-1])
+    ref_params = get_burst_params_backdate(reference_scene, burstId, polarization)
+    sec_params = get_burst_params_backdate(secondary_scene, burstId, polarization)
 
     ref_metadata, sec_metadata = download_bursts([ref_params, sec_params])
 
@@ -186,7 +191,7 @@ def make_readme(
 ) -> None:
     wrapped_phase_path = product_dir / f'{product_name}__rng_off.tif'
     info = gdal.Info(str(wrapped_phase_path), format='json')
-    secondary_granule_datetime_str = secondary_scene.split('_')[3]
+    secondary_granule_datetime_str = secondary_scene.split('_')[5]
 
     payload = {
         'processing_date': datetime.now(timezone.utc),
@@ -245,8 +250,8 @@ def make_parameter_file(
 
     parser = etree.XMLParser(encoding='utf-8', recover=True)
 
-    ref_tag = reference_scene[-10:-6]
-    sec_tag = secondary_scene[-10:-6]
+    ref_tag = reference_scene[-4:]
+    sec_tag = secondary_scene[-4:]
     reference_safe = [file for file in os.listdir('.') if file.endswith(f'{ref_tag}.SAFE')][0]
     secondary_safe = [file for file in os.listdir('.') if file.endswith(f'{sec_tag}.SAFE')][0]
 
@@ -474,6 +479,12 @@ def main():
     parser.add_argument('--esa-username', default=None, help="Username for ESA\'s Copernicus Data Space Ecosystem")
     parser.add_argument('--esa-password', default=None, help="Password for ESA\'s Copernicus Data Space Ecosystem")
     parser.add_argument(
+        '--burstId', type=str, default='012_023790_IW1', help='ESA Burst ID'
+    )
+    parser.add_argument(
+        '--polarization', choices=['VV', 'HH', 'VH', 'HV'], default='VV', help='polarization'
+    )
+    parser.add_argument(
         '--looks', choices=['20x4', '10x2', '5x1'], default='20x4', help='Number of looks to take in range and azimuth'
     )
     parser.add_argument(
@@ -496,17 +507,19 @@ def main():
     configure_root_logger()
     log.debug(' '.join(sys.argv))
 
-    log.info('Begin ISCE2 TopsApp run')
+    log.info('Begin ISCE2 TopsApp Fufiters DenseOffsets Run')
 
-    reference_scene, secondary_scene = oldest_granule_first(args.granules[0], args.granules[1])
-    validate_bursts(reference_scene, secondary_scene)
-    swath_number = int(reference_scene[12])
+    reference_scene, secondary_scene = args.granules[0], args.granules[1]
+    swath_number = args.burstId[-1]
+
     range_looks, azimuth_looks = [int(looks) for looks in args.looks.split('x')]
     apply_water_mask = args.apply_water_mask
 
-    isce_output_dir = insar_tops_burst(
+    isce_output_dir = insar_tops_fufiters(
         reference_scene=reference_scene,
         secondary_scene=secondary_scene,
+        burstId=args.burstId,
+        polarization=args.polarization,
         azimuth_looks=azimuth_looks,
         range_looks=range_looks,
         swath_number=swath_number,
@@ -515,10 +528,14 @@ def main():
         esa_password=args.esa_password,
     )
 
-    log.info('ISCE2 TopsApp run completed successfully')
+    log.info('END ISCE2 TopsApp Fufiters DenseOffsets Run')
     pixel_size = get_pixel_size(args.looks)
-    product_name = get_product_name(reference_scene, secondary_scene, pixel_spacing=int(pixel_size))
-
+  #Include relativeObit in ProductName for convenience?
+    reference_date = reference_scene[17:25]
+    secondary_date = secondary_scene[17:25]
+    product_id = token_hex(2).upper()
+    product_name = f'S1_{args.burstId[4:]}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}_{product_id}'
+    
     product_dir = Path(product_name)
     product_dir.mkdir(parents=True, exist_ok=True)
 
