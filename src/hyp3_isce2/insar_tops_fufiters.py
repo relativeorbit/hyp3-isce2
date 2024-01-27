@@ -522,7 +522,6 @@ def main():
         polarization=args.polarization,
         azimuth_looks=azimuth_looks,
         range_looks=range_looks,
-        swath_number=swath_number,
         apply_water_mask=apply_water_mask,
         esa_username=args.esa_username,
         esa_password=args.esa_password,
