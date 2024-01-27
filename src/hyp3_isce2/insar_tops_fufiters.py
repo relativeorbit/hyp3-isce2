@@ -151,11 +151,11 @@ def insar_tops_fufiters(
         isce2_copy('merged/unmasked.phsig.cor', 'merged/phsig.cor')
     else:
         # computing IFG isnt't strictly necessary but simplifies standard creation of merged folder & gives coherence
-        topsapp.run_topsapp_burst(start='computeBaselines', end='geocode', config_xml=config_path)
+        topsapp.run_topsapp_burst(start='computeBaselines', end='denseoffsets', config_xml=config_path)
+    
     copyfile('merged/z.rdr.full.xml', 'merged/z.rdr.full.vrt.xml')
-    topsapp.run_topsapp_burst(start='geocode', end='geocode', config_xml=config_path)
 
-  # For reasons unknown, this raises an error, but works if launched from a subprocess!
+    # For reasons unknown, this raises an error, but works if launched from a subprocess!
     #  https://github.com/isce-framework/isce2/issues/146
     #  mp.set_start_method("fork") -> RuntimeError: context has already been set
     #topsapp.run_topsapp_burst(start='denseoffsets', end='geocodeoffsets', config_xml=config_path)
@@ -189,7 +189,7 @@ def make_readme(
     azimuth_looks: int,
     apply_water_mask: bool,
 ) -> None:
-    wrapped_phase_path = product_dir / f'{product_name}__rng_off.tif'
+    wrapped_phase_path = product_dir / f'{product_name}_rng_off.tif'
     info = gdal.Info(str(wrapped_phase_path), format='json')
     secondary_granule_datetime_str = secondary_scene.split('_')[5]
 
@@ -350,7 +350,7 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
         ISCE2Dataset('dem.crop', 'dem', 1),
         ISCE2Dataset('filt_dense_offsets.bil.geo', 'azi_off', 1),
         ISCE2Dataset('filt_dense_offsets.bil.geo', 'rng_off', 2),
-        ISCE2Dataset('filt_dense_offsets_snr.bil.geo', 'snr', 1),
+        ISCE2Dataset('dense_offsets_snr.bil.geo', 'snr', 1),
     ]
 
     for dataset in datasets:

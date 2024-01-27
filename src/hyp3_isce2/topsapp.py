@@ -30,6 +30,9 @@ TOPSAPP_STEPS = [
     'unwrap',
     'unwrap2stage',
     'geocode',
+    'denseoffsets',
+    'filteroffsets',
+    'geocodeoffsets',
 ]
 TOPSAPP_GEOCODE_LIST = [
     'merged/phsig.cor',

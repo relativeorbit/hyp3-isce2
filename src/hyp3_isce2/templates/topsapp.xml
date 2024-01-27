@@ -31,7 +31,7 @@
     <property name="ESD coherence threshold">{{ esd_coherence_threshold }}</property>
     <property name="use virtual files">{{ use_virtual_files }}</property>
     <property name="geocode list">{{ geocode_list }}</property>
-    <property name="offset geocode list">['merged/filt_dense_offsets.bil','merged/filt_dense_offsets_snr.bil']</property> 
+    <property name="offset geocode list">['merged/filt_dense_offsets.bil','merged/dense_offsets_snr.bil']</property> 
     <property name="Ampcor window width">64</property> 
     <property name="Ampcor window height">16</property> 
     <property name="Ampcor search window width">16</property> 
