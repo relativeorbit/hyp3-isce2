@@ -151,7 +151,7 @@ def insar_tops_fufiters(
         isce2_copy('merged/unmasked.phsig.cor', 'merged/phsig.cor')
     else:
         # computing IFG isnt't strictly necessary but simplifies standard creation of merged folder & gives coherence
-        topsapp.run_topsapp_burst(start='computeBaselines', end='denseoffsets', config_xml=config_path)
+        topsapp.run_topsapp_burst(start='computeBaselines', end='geocode', config_xml=config_path)
     
     copyfile('merged/z.rdr.full.xml', 'merged/z.rdr.full.vrt.xml')
 
