@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(prefix_chars='+', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         '++process',
-        choices=['insar_tops_burst', 'insar_tops_fufiters', 'insar_tops', 'insar_stripmap'],
+        choices=['insar_tops_burst', 'insar_tops', 'insar_stripmap', 'merge_tops_bursts', 'insar_tops_fufiters'],
         default='insar_tops_burst',
         help='Select the HyP3 entrypoint to use',  # HyP3 entrypoints are specified in `pyproject.toml`
     )
