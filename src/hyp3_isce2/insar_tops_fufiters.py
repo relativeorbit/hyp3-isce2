@@ -11,8 +11,6 @@ from pathlib import Path
 from shutil import copyfile, make_archive
 from typing import Optional
 
-from secrets import token_hex
-
 import isce
 from hyp3lib.aws import upload_file_to_s3
 from hyp3lib.get_orb import downloadSentinelOrbitFile
@@ -508,8 +506,7 @@ def main():
     #Include relativeObit in ProductName for convenience?
     reference_date = reference_scene[17:25]
     secondary_date = secondary_scene[17:25]
-    product_id = token_hex(2).upper()
-    product_name = f'S1_{args.burstId[4:]}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}_{product_id}'
+    product_name = f'S1_{args.burstId[4:]}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}'
 
     product_dir = Path(product_name)
     product_dir.mkdir(parents=True, exist_ok=True)
