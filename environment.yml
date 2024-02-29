@@ -13,23 +13,24 @@ dependencies:
   - jinja2
   - asf_search>=6.4.0
   - gdal
-  - opencv
+  # - opencv
   # For packaging, and testing
-  - flake8
-  - flake8-import-order
-  - flake8-blind-except
-  - flake8-builtins
-  - setuptools
-  - setuptools_scm
-  - wheel
-  - pytest
-  - pytest-console-scripts
-  - pytest-cov
-  - pytest-mock
+  # - flake8
+  # - flake8-import-order
+  # - flake8-blind-except
+  # - flake8-builtins
+  # - setuptools
+  # - setuptools_scm
+  # - wheel
+  # - pytest
+  # - pytest-console-scripts
+  # - pytest-cov
+  # - pytest-mock
   # For running
   - hyp3lib>=3,<4
   # Additional
-  - xmlschema
-  - pyarrow
-  - fsspec
   - aiohttp
+  - fsspec
+  - pyarrow
+  - xmlschema
+  - xmltodict

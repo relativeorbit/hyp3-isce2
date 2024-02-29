@@ -5,6 +5,9 @@ from isce.applications.topsApp import TopsInSAR
 from jinja2 import Template
 from osgeo import gdal
 
+import xmltodict as xd
+import shutil
+
 gdal.UseExceptions()
 
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
@@ -39,7 +42,6 @@ TOPSAPP_GEOCODE_LIST = [
     'merged/topophase.cor',
     'merged/filt_topophase.unw.conncomp',
 ]
-
 
 class TopsappBurstConfig:
     """Configuration for a topsApp.py run"""
@@ -108,6 +110,22 @@ class TopsappBurstConfig:
 
         with open(filename, 'w') as file:
             file.write(self.generate_template())
+
+        # Check for additional fufiters config to modify the template 
+        if Path('fufiters.xml').exists():
+            print('Found fufiters.xml, overwriting default config!')
+            shutil.copyfile('topsApp.xml','topsApp.xml.bak')
+            with open('topsApp.xml','r') as f:
+                config = xd.parse(f.read())
+                a = config['topsApp']['component']['property']
+            with open('fufiters.xml','r') as f:
+                b = xd.parse(f.read())['topsApp']['component']['property']
+    
+            # topsApp.xml properties from 'b' will overwrite those from 'a'
+            # https://stackoverflow.com/questions/11092511/list-of-unique-dictionaries
+            config['topsApp']['component']['property'] = list({v['@name']:v for v in a+b}.values())
+            with open('topsApp.xml','w') as f:
+                f.write(xd.unparse(config, pretty=True, indent='  '))
 
         return filename
 
