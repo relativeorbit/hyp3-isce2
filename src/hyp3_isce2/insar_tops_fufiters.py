@@ -585,7 +585,9 @@ def main():
         subprocess.run(cmd.split(' '), check=True)
 
     # Convert to COGs NOTE: create separate workflow for this + STAC?
-    for regular_tif in product_dir.glob('*.tif'):
+    print('Converting to COGs...')
+    files = [str(path) for path in product_dir.glob('*.tif') if not path.name.endswith('rdr.tif')]
+    for regular_tif in files:
         os.rename(regular_tif, 'tmp.tif')
         cmd = (
             'gdal_translate '
