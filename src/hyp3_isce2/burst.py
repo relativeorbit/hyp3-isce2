@@ -374,7 +374,7 @@ def get_product_name(reference_scene: str, secondary_scene: str, pixel_spacing: 
     polarization = reference_split[4]
     product_type = 'INT'
     pixel_spacing = str(int(pixel_spacing))
-    product_id = 'FFTS'
+    product_id = token_hex(2).upper()
 
     return '_'.join(
         [

@@ -559,7 +559,10 @@ def main():
     multilook_position = multilook_radar_merge_inputs(swath_number, rg_looks=range_looks, az_looks=azimuth_looks)
     
     pixel_size = get_pixel_size(args.looks)
-    product_name = get_product_name(reference_scene, secondary_scene, pixel_spacing=int(pixel_size))
+    reference_date = reference_scene[17:25]
+    secondary_date = secondary_scene[17:25]
+    product_id = 'FFTS'
+    product_name = f'S1_{args.burstId[4:]}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}_{product_id}'
 
     product_dir = Path(product_name)
     product_dir.mkdir(parents=True, exist_ok=True)
