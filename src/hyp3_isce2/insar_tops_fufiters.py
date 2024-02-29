@@ -539,6 +539,7 @@ def main():
     swath_number = args.burstId[-1]
     
     range_looks, azimuth_looks = [int(looks) for looks in args.looks.split('x')]
+    
     apply_water_mask = args.apply_water_mask
 
     isce_output_dir = insar_tops_fufiters(
@@ -558,10 +559,7 @@ def main():
     multilook_position = multilook_radar_merge_inputs(swath_number, rg_looks=range_looks, az_looks=azimuth_looks)
     
     pixel_size = get_pixel_size(args.looks)
-    #Include relativeObit in ProductName for convenience?
-    reference_date = reference_scene[17:25]
-    secondary_date = secondary_scene[17:25]
-    product_name = f'S1_{args.burstId[4:]}_{reference_date}_{secondary_date}_{args.polarization}_INT{int(pixel_size)}'
+    product_name = get_product_name(reference_scene, secondary_scene, pixel_spacing=int(pixel_size))
 
     product_dir = Path(product_name)
     product_dir.mkdir(parents=True, exist_ok=True)
