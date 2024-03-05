@@ -22,7 +22,8 @@
     <property name="region of interest">{{ roi }}</property>
     <property name="demFilename">{{ dem_filename }}</property>
     <property name="geocodeDemFilename">{{ geocode_dem_filename }}</property>
-    <property name="do unwrap">{{ do_unwrap }}</property>
+    <property name="do unwrap">False</property>
+    <property name="do dense offsets">{{ do_dense_offsets }}</property>
     <property name="unwrapper name">snaphu_mcf</property>
     <property name="do ionosphere correction">{{ estimate_ionosphere_delay }}</property>
     <property name="apply ionosphere correction">False</property>
@@ -30,5 +31,12 @@
     <property name="ESD coherence threshold">{{ esd_coherence_threshold }}</property>
     <property name="use virtual files">{{ use_virtual_files }}</property>
     <property name="geocode list">{{ geocode_list }}</property>
+    <property name="offset geocode list">['merged/filt_dense_offsets.bil','merged/dense_offsets_snr.bil']</property> 
+    <property name="Ampcor window width">64</property> 
+    <property name="Ampcor window height">16</property> 
+    <property name="Ampcor search window width">16</property> 
+    <property name="Ampcor search window height">16</property> 
+    <property name="Ampcor skip width">20</property> 
+    <property name="Ampcor skip height">4</property>   
   </component>
 </topsApp>

@@ -70,6 +70,7 @@ def insar_tops_fufiters(
     azimuth_looks: int = 4,
     range_looks: int = 20,
     apply_water_mask: bool = False,
+    offsets: bool = False,
     esa_username: Optional[str] = None,
     esa_password: Optional[str] = None,
 ) -> Path:
@@ -83,6 +84,7 @@ def insar_tops_fufiters(
         azimuth_looks: Number of azimuth looks
         range_looks: Number of range looks
         apply_water_mask: Whether to apply a pre-unwrap water mask
+        offsets: Whether to generate denseOffset files instead of InSAR
         esa_username: Username for ESA's Copernicus Data Space Ecosystem
         esa_password: Password for ESA's Copernicus Data Space Ecosystem
 
@@ -115,7 +117,12 @@ def insar_tops_fufiters(
     log.info(f'InSAR ROI: {insar_roi}')
     log.info(f'DEM ROI: {dem_roi}')
 
-    dem_path = download_dem_for_isce2(dem_roi, dem_name='glo_30', dem_dir=dem_dir, buffer=0, resample_20m=False)
+    if not dem_dir.exists():
+        dem_path = download_dem_for_isce2(dem_roi, dem_name='glo_30', dem_dir=dem_dir, buffer=0, resample_20m=False)
+    else:
+        print(f'{dem_dir} already exists, skipping download.')
+        dem_path = Path('./dem/full_res.dem.wgs84')
+    
     download_aux_cal(aux_cal_dir)
 
     if range_looks == 5:
@@ -129,6 +136,25 @@ def insar_tops_fufiters(
     for granule in (ref_params.granule, sec_params.granule):
         downloadSentinelOrbitFile(granule, str(orbit_dir), esa_credentials=(esa_username, esa_password))
 
+    if offsets:
+        DO_UNWRAP=False
+        DO_OFFSETS=True 
+        geocode_list = [
+            'merged/phsig.cor',
+            'merged/los.rdr',
+            ]
+    else:
+        DO_UNWRAP=True
+        DO_OFFSETS=False
+        geocode_list = [
+            'merged/phsig.cor',
+            'merged/filt_topophase.unw',
+            'merged/los.rdr',
+            'merged/filt_topophase.flat',
+            'merged/topophase.cor',
+            'merged/filt_topophase.unw.conncomp',
+        ]
+
     config = topsapp.TopsappBurstConfig(
         reference_safe=f'{ref_params.granule}.SAFE',
         secondary_safe=f'{sec_params.granule}.SAFE',
@@ -138,9 +164,12 @@ def insar_tops_fufiters(
         roi=insar_roi,
         dem_filename=str(dem_path),
         geocode_dem_filename=str(geocode_dem_path),
+        geocode_list=geocode_list,
         swaths=swath_number,
         azimuth_looks=azimuth_looks,
         range_looks=range_looks,
+        do_unwrap=DO_UNWRAP,
+        do_dense_offsets=DO_OFFSETS
     )
     config_path = config.write_template('topsApp.xml')
 
@@ -158,9 +187,37 @@ def insar_tops_fufiters(
         topsapp.run_topsapp_burst(start='unwrap', end='unwrap2stage', config_xml=config_path)
         isce2_copy('merged/unmasked.phsig.cor', 'merged/phsig.cor')
     else:
-        topsapp.run_topsapp_burst(start='computeBaselines', end='unwrap2stage', config_xml=config_path)
+        if offsets:
+            # computing IFG isnt't strictly necessary but simplifies standard creation of merged folder & gives coherence
+            topsapp.run_topsapp_burst(start='computeBaselines', end='geocode', config_xml=config_path)
+        else:
+            topsapp.run_topsapp_burst(start='computeBaselines', end='unwrap2stage', config_xml=config_path)
+    
     copyfile('merged/z.rdr.full.xml', 'merged/z.rdr.full.vrt.xml')
-    topsapp.run_topsapp_burst(start='geocode', end='geocode', config_xml=config_path)
+    if offsets:
+        # For reasons unknown, this raises an error, but works if launched from a subprocess!
+        #  https://github.com/isce-framework/isce2/issues/146
+        #  mp.set_start_method("fork") -> RuntimeError: context has already been set
+        #topsapp.run_topsapp_burst(start='denseoffsets', end='geocodeoffsets', config_xml=config_path)
+        ISCE_APPLICATIONS = str(Path(os.environ['ISCE_HOME']) / 'applications')
+        cmd = f"{ISCE_APPLICATIONS}/topsApp.py --start=denseoffsets --end=filteroffsets"
+        print(cmd)
+        subprocess.run(cmd.split(' '), check=True)
+
+        # Hack: In order for geocoding step to work, need to copy some XML metadata from previous steps
+        with open('PICKLE/mergebursts.xml', 'r') as f:
+            lines = f.readlines()
+            indx = [i for i,x in enumerate(lines) if 'numberofcommonbursts' in x][0]
+            append_lines = lines[indx:indx+4]
+        with open('PICKLE/filteroffsets.xml', 'r+') as f:
+            lines = f.readlines()
+            lines[1:1] = append_lines
+            f.seek(0) #overwrite from begginning
+            f.writelines(lines)
+
+        topsapp.run_topsapp_burst(dostep='geocodeoffsets', config_xml=config_path)
+    else:
+        topsapp.run_topsapp_burst(start='geocode', end='geocode', config_xml=config_path)
 
     return Path('merged')
 
@@ -173,8 +230,12 @@ def make_readme(
     range_looks: int,
     azimuth_looks: int,
     apply_water_mask: bool,
+    offsets: bool,
 ) -> None:
-    wrapped_phase_path = product_dir / f'{product_name}_wrapped_phase.tif'
+    if offsets:
+        wrapped_phase_path = product_dir / f'{product_name}_rng_off.tif'
+    else:
+        wrapped_phase_path = product_dir / f'{product_name}_wrapped_phase.tif'
     info = gdal.Info(str(wrapped_phase_path), format='json')
     secondary_granule_datetime_str = secondary_scene.split('_')[5]
 
@@ -330,7 +391,12 @@ def find_product(pattern: str) -> str:
     return product
 
 
-def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: float, include_radar: bool = False, use_multilooked=False) -> None:
+def translate_outputs(isce_output_dir: Path, 
+                      product_name: str, 
+                      pixel_size: float, 
+                      include_radar: bool = False, 
+                      use_multilooked=False, 
+                      offsets: bool = False) -> None:
     """Translate ISCE outputs to a standard GTiff format with a UTM projection
 
     Args:
@@ -339,8 +405,8 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
         pixel_size: Pixel size
         include_radar: Flag to include the full resolution radar geometry products in the output
     """
-
-    src_ds = gdal.Open(str(isce_output_dir / 'filt_topophase.unw.geo'))
+    # Use coherence as src file b/c present in both offsets and InSAR workflows
+    src_ds = gdal.Open(str(isce_output_dir / 'phsig.cor.geo'))
     src_geotransform = src_ds.GetGeoTransform()
     src_projection = src_ds.GetProjection()
 
@@ -350,12 +416,21 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
 
     del src_ds, target_ds
 
-    datasets = [
-        ISCE2Dataset('filt_topophase.unw.geo', 'unw_phase', [2]),
+    if offsets:
+        datasets = [
         ISCE2Dataset('phsig.cor.geo', 'corr', [1]),
         ISCE2Dataset('dem.crop', 'dem', [1]),
-        ISCE2Dataset('filt_topophase.unw.conncomp.geo', 'conncomp', [1]),
+        ISCE2Dataset('filt_dense_offsets.bil.geo', 'azi_off', [1]),
+        ISCE2Dataset('filt_dense_offsets.bil.geo', 'rng_off', [2]),
+        ISCE2Dataset('dense_offsets_snr.bil.geo', 'snr', [1]),
     ]
+    else:
+        datasets = [
+            ISCE2Dataset('phsig.cor.geo', 'corr', [1]),
+            ISCE2Dataset('dem.crop', 'dem', [1]),
+            ISCE2Dataset('filt_topophase.unw.geo', 'unw_phase', [2]),
+            ISCE2Dataset('filt_topophase.unw.conncomp.geo', 'conncomp', [1]),
+        ]
 
     suffix = '01'
     if use_multilooked:
@@ -375,7 +450,6 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
     if include_radar:
         datasets += rdr_datasets
 
-
     for dataset in datasets:
         out_file = str(Path(product_name) / f'{product_name}_{dataset.suffix}.tif')
         in_file = str(isce_output_dir / dataset.name)
@@ -390,16 +464,17 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
         )
 
     # Use numpy.angle to extract the phase component of the complex wrapped interferogram
-    wrapped_phase = ISCE2Dataset('filt_topophase.flat.geo', 'wrapped_phase', 1)
-    cmd = (
-        'gdal_calc.py '
-        '--overwrite '
-        f'--outfile {product_name}/{product_name}_{wrapped_phase.suffix}.tif '
-        f'-A {isce_output_dir / wrapped_phase.name} --A_band={wrapped_phase.band} '
-        '--calc angle(A) --type Float32 --format GTiff --NoDataValue=0 '
-        '--creation-option TILED=YES --creation-option COMPRESS=LZW --creation-option NUM_THREADS=ALL_CPUS'
-    )
-    subprocess.run(cmd.split(' '), check=True)
+    if not offsets:
+        wrapped_phase = ISCE2Dataset('filt_topophase.flat.geo', 'wrapped_phase', 1)
+        cmd = (
+            'gdal_calc.py '
+            '--overwrite '
+            f'--outfile {product_name}/{product_name}_{wrapped_phase.suffix}.tif '
+            f'-A {isce_output_dir / wrapped_phase.name} --A_band={wrapped_phase.band} '
+            '--calc angle(A) --type Float32 --format GTiff --NoDataValue=0 '
+            '--creation-option TILED=YES --creation-option COMPRESS=LZW --creation-option NUM_THREADS=ALL_CPUS'
+        )
+        subprocess.run(cmd.split(' '), check=True)
 
     ds = gdal.Open(str(isce_output_dir / 'los.rdr.geo'), gdal.GA_Update)
     ds.GetRasterBand(1).SetNoDataValue(0)
@@ -436,11 +511,7 @@ def translate_outputs(isce_output_dir: Path, product_name: str, pixel_size: floa
     )
     subprocess.run(cmd.split(' '), check=True)
 
-    ds = gdal.Open(str(isce_output_dir / 'filt_topophase.unw.geo'))
-    geotransform = ds.GetGeoTransform()
-    del ds
-
-    epsg = utm_from_lon_lat(geotransform[0], geotransform[3])
+    epsg = utm_from_lon_lat(src_geotransform[0],src_geotransform[3])
     files = [str(path) for path in Path(product_name).glob('*.tif') if not path.name.endswith('rdr.tif')]
     for file in files:
         gdal.Warp(
@@ -518,6 +589,12 @@ def main():
         default=False,
         help='Apply a water body mask before unwrapping.',
     )
+    parser.add_argument(
+        '--offsets',
+        type=string_is_true,
+        default=False,
+        help='Generate denseOffset files instead of InSAR',
+    )
     # Allows granules to be given as a space-delimited list of strings (e.g. foo bar) or as a single
     # quoted string that contains spaces (e.g. "foo bar"). AWS Batch uses the latter format when
     # invoking the container command.
@@ -533,7 +610,10 @@ def main():
     configure_root_logger()
     log.debug(' '.join(sys.argv))
 
-    log.info('Begin ISCE2 TopsApp FUFITERS!!!')
+    if args.offsets:
+        log.info('Begin ISCE2 TopsApp FUFITERS denseOffsets!!!')
+    else:
+        log.info('Begin ISCE2 TopsApp FUFITERS InSAR!!!')
 
     reference_scene, secondary_scene = args.granules[0], args.granules[1]
     swath_number = args.burstId[-1]
@@ -550,6 +630,7 @@ def main():
         azimuth_looks=azimuth_looks,
         range_looks=range_looks,
         apply_water_mask=apply_water_mask,
+        offsets=args.offsets,
         esa_username=args.esa_username,
         esa_password=args.esa_password,
     )
@@ -567,7 +648,7 @@ def main():
     product_dir = Path(product_name)
     product_dir.mkdir(parents=True, exist_ok=True)
 
-    translate_outputs(isce_output_dir, product_name, pixel_size=pixel_size, include_radar=True, use_multilooked=True)
+    translate_outputs(isce_output_dir, product_name, pixel_size=pixel_size, include_radar=True, use_multilooked=True, offsets=args.offsets)
 
     unwrapped_phase = f'{product_name}/{product_name}_unw_phase.tif'
     water_mask = f'{product_name}/{product_name}_water_mask.tif'
@@ -598,7 +679,11 @@ def main():
         )
         subprocess.run(cmd.split(' '), check=True)
 
-    make_browse_image(unwrapped_phase, f'{product_name}/{product_name}_unw_phase.png')
+    if args.offsets:
+        range_offsets = f'{product_name}/{product_name}_rng_off.tif'
+        make_browse_image(range_offsets, f'{product_name}/{product_name}_rng_off.png')
+    else:
+        make_browse_image(unwrapped_phase, f'{product_name}/{product_name}_unw_phase.png')
 
     make_readme(
         product_dir=product_dir,
@@ -608,6 +693,7 @@ def main():
         range_looks=range_looks,
         azimuth_looks=azimuth_looks,
         apply_water_mask=apply_water_mask,
+        offsets=args.offsets,
     )
     make_parameter_file(
         Path(f'{product_name}/{product_name}.txt'),

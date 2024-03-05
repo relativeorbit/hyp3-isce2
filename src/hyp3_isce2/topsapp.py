@@ -33,14 +33,9 @@ TOPSAPP_STEPS = [
     'unwrap',
     'unwrap2stage',
     'geocode',
-]
-TOPSAPP_GEOCODE_LIST = [
-    'merged/phsig.cor',
-    'merged/filt_topophase.unw',
-    'merged/los.rdr',
-    'merged/filt_topophase.flat',
-    'merged/topophase.cor',
-    'merged/filt_topophase.unw.conncomp',
+    'denseoffsets',
+    'filteroffsets',
+    'geocodeoffsets',
 ]
 
 class TopsappBurstConfig:
@@ -55,11 +50,13 @@ class TopsappBurstConfig:
         aux_cal_directory: str,
         dem_filename: str,
         geocode_dem_filename: str,
+        geocode_list: Sequence[float],
         roi: Sequence[float],
         swaths: Union[int, Iterable[int]] = (1, 2, 3),
         azimuth_looks: int = 4,
         range_looks: int = 20,
         do_unwrap: bool = True,
+        do_dense_offsets: bool = False
     ):
         self.reference_safe = reference_safe
         self.secondary_safe = secondary_safe
@@ -69,9 +66,11 @@ class TopsappBurstConfig:
         self.roi = [roi[1], roi[3], roi[0], roi[2]]
         self.dem_filename = dem_filename
         self.geocode_dem_filename = geocode_dem_filename
+        self.geocode_list = geocode_list
         self.azimuth_looks = azimuth_looks
         self.range_looks = range_looks
         self.do_unwrap = do_unwrap
+        self.do_dense_offsets = do_dense_offsets
 
         if isinstance(swaths, int):
             self.swaths = [swaths]
@@ -85,7 +84,6 @@ class TopsappBurstConfig:
         self.filter_strength = 0.5
         self.do_unwrap = True
         self.use_virtual_files = True
-        self.geocode_list = TOPSAPP_GEOCODE_LIST
 
     def generate_template(self) -> str:
         """Generate the topsApp.py jinja2 template
