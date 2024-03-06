@@ -82,7 +82,6 @@ class TopsappBurstConfig:
         self.do_esd = False
         self.esd_coherence_threshold = 0.7
         self.filter_strength = 0.5
-        self.do_unwrap = True
         self.use_virtual_files = True
 
     def generate_template(self) -> str:

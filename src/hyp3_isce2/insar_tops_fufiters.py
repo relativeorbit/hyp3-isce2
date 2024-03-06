@@ -395,7 +395,7 @@ def translate_outputs(isce_output_dir: Path,
                       product_name: str, 
                       pixel_size: float, 
                       include_radar: bool = False, 
-                      use_multilooked=False, 
+                      use_multilooked = False, 
                       offsets: bool = False) -> None:
     """Translate ISCE outputs to a standard GTiff format with a UTM projection
 
@@ -404,6 +404,7 @@ def translate_outputs(isce_output_dir: Path,
         product_name: Name of the product
         pixel_size: Pixel size
         include_radar: Flag to include the full resolution radar geometry products in the output
+        offsets: Flag to indicate denseOffsets workflow
     """
     # Use coherence as src file b/c present in both offsets and InSAR workflows
     src_ds = gdal.Open(str(isce_output_dir / 'phsig.cor.geo'))
@@ -418,12 +419,12 @@ def translate_outputs(isce_output_dir: Path,
 
     if offsets:
         datasets = [
-        ISCE2Dataset('phsig.cor.geo', 'corr', [1]),
-        ISCE2Dataset('dem.crop', 'dem', [1]),
-        ISCE2Dataset('filt_dense_offsets.bil.geo', 'azi_off', [1]),
-        ISCE2Dataset('filt_dense_offsets.bil.geo', 'rng_off', [2]),
-        ISCE2Dataset('dense_offsets_snr.bil.geo', 'snr', [1]),
-    ]
+            ISCE2Dataset('phsig.cor.geo', 'corr', [1]),
+            ISCE2Dataset('dem.crop', 'dem', [1]),
+            ISCE2Dataset('filt_dense_offsets.bil.geo', 'azi_off', [1]),
+            ISCE2Dataset('filt_dense_offsets.bil.geo', 'rng_off', [2]),
+            ISCE2Dataset('dense_offsets_snr.bil.geo', 'snr', [1]),
+        ]
     else:
         datasets = [
             ISCE2Dataset('phsig.cor.geo', 'corr', [1]),
