@@ -336,14 +336,13 @@ def download_bursts(param_list: Iterator[BurstParams]) -> List[BurstMetadata]:
     """
     with get_asf_session() as asf_session:
         with ThreadPoolExecutor(max_workers=10) as executor:
-            xml_futures = [executor.submit(download_metadata, asf_session, params) for params in param_list]
             tiff_futures = [executor.submit(download_burst, asf_session, params) for params in param_list]
-            metadata_xmls = [future.result() for future in xml_futures]
             burst_paths = [future.result() for future in tiff_futures]
 
     bursts = []
-    for params, metadata_xml, burst_path in zip(param_list, metadata_xmls, burst_paths):
-        burst = BurstMetadata(metadata_xml, params)
+    for params, burst_path in zip(param_list, burst_paths):
+        metadata = etree.parse(f'{params.granule}.xml').getroot()
+        burst = BurstMetadata(metadata, params)
         spoof_safe(burst, burst_path)
         bursts.append(burst)
     log.info('SAFEs created!')
@@ -407,7 +406,10 @@ def get_burst_params(scene_name: str) -> BurstParams:
 
 
 def get_burst_tanx(burstId):
-    ''' time from ascending node should be constant for given burst'''
+    '''
+    retrieve burst tanx from ESA Database 
+    time from ascending node should be constant for given burst
+    '''
     RELORB,BURSTID,SUBSWATH = burstId.split('_')
     url = 'https://github.com/relativeorbit/s1burstids/raw/main/burst_map_IW_000001_375887_brotli.parquet'
     with fsspec.open(url) as file:
@@ -431,9 +433,14 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
         relativeBurstID = int(burstId.split('_')[1])
 
         # Get All XML metadata for SLC
-        root = download_metadata(session, BurstParams(scene_name, subswath, polarization, 1))
+        metadata_path = download_metadata(session, BurstParams(scene_name, subswath, polarization, 0), out_file=f'{scene_name}.xml')
+        root = etree.parse(f'{scene_name}.xml').getroot()
         ipfnode = root.find('.//safe:software', {'safe':'http://www.esa.int/safe/sentinel-1.0'})
         IPF = ipfnode.attrib['version']
+
+        # Ensure that metata tanx is <= T_orbit
+        startTimeANX = root.find('.//s1:startTimeANX', {'s1':'http://www.esa.int/safe/sentinel-1.0/sentinel-1'})
+        startTANX = float(startTimeANX.text)*1e-3
 
         # Extract correct section of xml
         for product in root.findall('.//product'):
@@ -455,13 +462,19 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
             burstnum = burst_numbers.index(relativeBurstID)
         else:
             print('Finding burst based on TANX...')
-            BURST_TANX = get_burst_tanx(burstId)
+            TANX_DB = get_burst_tanx(burstId)
             tanx = np.array([t['azimuthAnxTime'] for t in parsed['swathTiming']['burstList']['burst']])
-            burstnum = np.argmin(np.abs(tanx - BURST_TANX))
+
+            T_ORBIT = (12 * 86400.0) / 175.0
+            if startTANX >= T_ORBIT:
+                print(f'metadata startANX {startTANX} >= T_ORBIT {T_ORBIT:.3f}, subtracting T_ORBIT...')
+                tanx = tanx - T_ORBIT
+            
+            burstnum = np.argmin(np.abs(tanx - TANX_DB))
         
         azimuth_times = [t.get('azimuthTime') for t in parsed['swathTiming']['burstList']['burst']]
         azimuthTime = azimuth_times[burstnum]
-        print(f'SLC Metadata for {relativeBurstID}: burstIndex= {burstnum}, azimuthTime= {azimuthTime}')
+        print(f'SLC Metadata for {relativeBurstID}: burstIndex= {burstnum}, tanxDB= {TANX_DB}, tanx={tanx[burstnum]}')
         
         return BurstParams(
             granule=scene_name,
