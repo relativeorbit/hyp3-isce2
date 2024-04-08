@@ -471,10 +471,7 @@ def get_burst_params_backdate(scene_name, burstId, polarization, product_schema=
                 tanx = tanx - T_ORBIT
             
             burstnum = np.argmin(np.abs(tanx - TANX_DB))
-        
-        azimuth_times = [t.get('azimuthTime') for t in parsed['swathTiming']['burstList']['burst']]
-        azimuthTime = azimuth_times[burstnum]
-        print(f'SLC Metadata for {relativeBurstID}: burstIndex= {burstnum}, tanxDB= {TANX_DB}, tanx={tanx[burstnum]}')
+            print(f'SLC Metadata for {relativeBurstID}: burstIndex= {burstnum}, tanxDB= {TANX_DB}, tanx={tanx[burstnum]}')
         
         return BurstParams(
             granule=scene_name,
