@@ -16,7 +16,9 @@ import requests
 from isceobj.Sensor.TOPS.Sentinel1 import Sentinel1
 from isceobj.TopsProc.runMergeBursts import multilook
 from lxml import etree
+from requests.adapters import HTTPAdapter
 from shapely import geometry
+from urllib3.util.retry import Retry
 
 # Fufiters workflow additional dependencies
 import xmlschema
@@ -307,12 +309,26 @@ def get_asf_session() -> requests.Session:
         A requests session with an ASF URS cookie.
     """
     session = requests.Session()
+    retry = Retry(
+        total=5,
+        connect=5,
+        read=5,
+        status=5,
+        backoff_factor=2,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=('GET',),
+    )
+    session.mount('https://', HTTPAdapter(max_retries=retry))
     payload = {
         'response_type': 'code',
         'client_id': 'BO_n7nTIlMljdvU6kRRB3g',
         'redirect_uri': 'https://auth.asf.alaska.edu/login',
     }
-    response = session.get('https://urs.earthdata.nasa.gov/oauth/authorize', params=payload)
+    response = session.get(
+        'https://urs.earthdata.nasa.gov/oauth/authorize',
+        params=payload,
+        timeout=(30, 120),
+    )
     response.raise_for_status()
     return session
 
